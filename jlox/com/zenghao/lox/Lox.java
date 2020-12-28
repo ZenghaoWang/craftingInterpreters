@@ -25,7 +25,7 @@ public class Lox {
         runFile(args[0]);
         break;
       default:
-        System.out.println("Usage: jlox [script]");
+        System.out.println("Usage: jlox [script], or jlox to run the REPL");
         System.exit(64);
     }
   }
@@ -53,6 +53,7 @@ public class Lox {
     InputStreamReader input = new InputStreamReader(System.in);
     BufferedReader reader = new BufferedReader(input);
 
+    System.out.println("=== JLox REPL ===");
     // Continuously read and execute user input
     while (true) {
       System.out.print("> ");
