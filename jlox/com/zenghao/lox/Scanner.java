@@ -139,6 +139,7 @@ class Scanner {
         // This is in default case because writing cases for all digits is a pain
         if (isDigit(c)) {
           number();
+
         }
 
         // letter or underscore
@@ -146,8 +147,9 @@ class Scanner {
           identifier();
         }
         // Source file contains a character Lox does not use
-        Lox.error(line, "Unexpected character: " + c);
-        break;
+        else {
+          Lox.error(line, "Unexpected character: " + c);
+        }
     }
   }
 
