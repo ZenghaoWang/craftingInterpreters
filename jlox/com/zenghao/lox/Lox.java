@@ -1,3 +1,6 @@
+/**
+ * Entry-point for our language.
+ */
 package com.zenghao.lox;
 
 import java.io.BufferedReader;

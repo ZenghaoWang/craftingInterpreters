@@ -1,3 +1,6 @@
+/**
+ * Responsible for taking a source code string and lexing it into an array of tokens.
+ */
 package com.zenghao.lox;
 
 import java.util.ArrayList;
