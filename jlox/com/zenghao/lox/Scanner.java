@@ -17,6 +17,28 @@ class Scanner {
   // The source line <current> is on
   private int line = 1;
 
+  // Reserved keywords used by the language
+  private static final Map<String, TokenType> reserved;
+  static {
+    reserved = new HashMap<>();
+    reserved.put("and", TokenType.AND);
+    reserved.put("class", TokenType.CLASS);
+    reserved.put("else", TokenType.ELSE);
+    reserved.put("false", TokenType.FALSE);
+    reserved.put("for", TokenType.FOR);
+    reserved.put("fun", TokenType.FUN);
+    reserved.put("if", TokenType.IF);
+    reserved.put("nil", TokenType.NIL);
+    reserved.put("or", TokenType.OR);
+    reserved.put("print", TokenType.PRINT);
+    reserved.put("return", TokenType.RETURN);
+    reserved.put("super", TokenType.SUPER);
+    reserved.put("this", TokenType.THIS);
+    reserved.put("true", TokenType.TRUE);
+    reserved.put("var", TokenType.VAR);
+    reserved.put("while", TokenType.WHILE);
+  }
+
   Scanner(String source) {
     this.source = source;
   }
@@ -30,6 +52,7 @@ class Scanner {
 
     // Add an end of file token once done
     tokens.add(new Token(TokenType.EOF, "", null, line));
+    return tokens;
   }
 
   private void scanToken() {
@@ -107,11 +130,89 @@ class Scanner {
         line++;
         break;
 
-      // Source file contains a character Lox does not use
+      // The start of a string literal
+      case '"':
+        string();
+        break;
       default:
+        // digit
+        // This is in default case because writing cases for all digits is a pain
+        if (isDigit(c)) {
+          number();
+        }
+
+        // letter or underscore
+        else if (isAlpha(c)) {
+          identifier();
+        }
+        // Source file contains a character Lox does not use
         Lox.error(line, "Unexpected character: " + c);
         break;
     }
+  }
+
+  /**
+   * Parse an identifier.
+   */
+  private void identifier() {
+    while (isAlphaNumeric(peek())) {
+      advance();
+    }
+
+    String text = source.substring(start, current);
+    TokenType type = reserved.get(text);
+    type = (type == null) ? TokenType.IDENTIFIER : type;
+
+    addToken(type);
+  }
+
+  /**
+   * Handling the parsing of a string literal.
+   */
+  private void string() {
+    // Consume chars until the string or file ends
+    while (peek() != '"' && !isAtEnd()) {
+      // Support multi-line strings
+      if (peek() == '\n') {
+        line++;
+      }
+      advance();
+    }
+
+    // Ran out of input to parse before string is terminated
+    if (isAtEnd()) {
+      Lox.error(line, "Unterminated string literal.");
+      return;
+    }
+
+    // Consume the closing quotation.
+    advance();
+
+    // Capture the string literal minus the surrounding quotations.
+    String value = source.substring(start + 1, current - 1);
+    addToken(TokenType.STRING, value);
+  }
+
+  /**
+   * Parse a number.
+   */
+  private void number() {
+    // Keep consuming characters until the number ends, or we hit a decimal point
+    while (isDigit(peek())) {
+      advance();
+    }
+
+    // Fractional
+    if (peek() == '.' && isDigit(peekNext())) {
+      advance();
+
+      while (isDigit(peek())) {
+        advance();
+      }
+    }
+
+    addToken(TokenType.NUMBER, Double.parseDouble(source.substring(start, current)));
+
   }
 
   /**
@@ -158,6 +259,37 @@ class Scanner {
    */
   private char peek() {
     return isAtEnd() ? '\0' : source.charAt(current);
+  }
+
+  /**
+   * Look ahead at the next character and do not consume.
+   * 
+   * @return the next char.
+   */
+  private char peekNext() {
+    if (current + 1 >= source.length()) {
+      return '\0';
+    }
+
+    return source.charAt(current + 1);
+  }
+
+  /**
+   * We dont use Character.isDigit() because it allows things like devangari
+   * digits
+   * 
+   * @return whether <c> is a number
+   */
+  private boolean isDigit(char c) {
+    return c >= '0' && c <= '9';
+  }
+
+  private boolean isAlpha(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+  }
+
+  private boolean isAlphaNumeric(char c) {
+    return isAlpha(c) || isDigit(c);
   }
 
   private boolean isAtEnd() {
