@@ -23,6 +23,23 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   }
 
   /**
+   * Execute a list of statements in the context of a given environment.
+   */
+  void executeBlock(List<Stmt> statements, Environment environment) {
+    Environment previous = this.environment;
+
+    try {
+      this.environment = environment;
+
+      for (Stmt stmt : statements) {
+        execute(stmt);
+      }
+    } finally {
+      this.environment = previous;
+    }
+  }
+
+  /**
    * Direct the Interpreter to the correct method to call according to the type of
    * expr
    * 
@@ -30,6 +47,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    */
   private Object evaluate(Expr expr) {
     return expr.accept(this);
+  }
+
+  @Override
+  public Void visitBlockStmt(Stmt.Block stmt) {
+    executeBlock(stmt.statements, new Environment(environment));
+    return null;
   }
 
   @Override
