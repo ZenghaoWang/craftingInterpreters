@@ -18,9 +18,7 @@ public class Parser {
   }
 
   /**
-   * Attempt to parse a list of tokens. For now, only parses a single expression.
-   * 
-   * @return An AST if successful
+   * Attempt to parse a list of tokens.
    */
   List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
@@ -77,7 +75,24 @@ public class Parser {
   }
 
   private Expr expression() {
-    return equality();
+    return assignment();
+  }
+
+  private Expr assignment() {
+    Expr expr = equality();
+    if (match(TokenType.EQUAL)) {
+      Token equals = previous();
+      Expr value = assignment();
+
+      if (expr instanceof Expr.Variable) {
+        Token name = ((Expr.Variable) expr).name;
+        return new Expr.Assign(name, value);
+      }
+
+      error(equals, "Invalid assignment target.");
+    }
+
+    return expr;
   }
 
   /**

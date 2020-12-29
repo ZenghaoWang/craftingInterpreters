@@ -1,5 +1,6 @@
 package com.zenghao.lox;
 
+import com.zenghao.lox.Expr.Assign;
 import com.zenghao.lox.Expr.Variable;
 
 public class AstPrinter implements Expr.Visitor<String> {
@@ -30,6 +31,11 @@ public class AstPrinter implements Expr.Visitor<String> {
   @Override
   public String visitVariableExpr(Variable expr) {
     return expr.name.lexeme;
+  }
+
+  @Override
+  public String visitAssignExpr(Assign expr) {
+    return "let " + expr.name.lexeme + " = " + expr.name.toString();
   }
 
   /**
