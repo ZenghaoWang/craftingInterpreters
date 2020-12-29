@@ -1,5 +1,7 @@
 package com.zenghao.lox;
 
+import com.zenghao.lox.Expr.Variable;
+
 public class AstPrinter implements Expr.Visitor<String> {
   String print(Expr expr) {
     return expr.accept(this);
@@ -23,6 +25,11 @@ public class AstPrinter implements Expr.Visitor<String> {
   @Override
   public String visitUnaryExpr(Expr.Unary expr) {
     return parenthesize(expr.operator.lexeme, expr.right);
+  }
+
+  @Override
+  public String visitVariableExpr(Variable expr) {
+    return expr.name.lexeme;
   }
 
   /**
@@ -50,4 +57,5 @@ public class AstPrinter implements Expr.Visitor<String> {
 
     System.out.println(new AstPrinter().print(expression));
   }
+
 }

@@ -1,13 +1,59 @@
 package com.zenghao.lox;
 
-public class Interpreter implements Expr.Visitor<Object> {
-  void interpret(Expr expression) {
+import java.util.List;
+
+import com.zenghao.lox.Stmt.Expression;
+import com.zenghao.lox.Stmt.Print;
+
+public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
+  private Environment environment = new Environment();
+
+  void interpret(List<Stmt> statements) {
     try {
-      Object value = evaluate(expression);
-      System.out.println(stringify(value));
+      for (Stmt statement : statements) {
+        execute(statement);
+      }
     } catch (RuntimeError e) {
       Lox.runtimeError(e);
     }
+  }
+
+  private void execute(Stmt stmt) {
+    stmt.accept(this);
+  }
+
+  /**
+   * Direct the Interpreter to the correct method to call according to the type of
+   * expr
+   * 
+   * @return the evaluated expression.
+   */
+  private Object evaluate(Expr expr) {
+    return expr.accept(this);
+  }
+
+  @Override
+  public Void visitExpressionStmt(Expression stmt) {
+    evaluate(stmt.expression);
+    return null;
+  }
+
+  @Override
+  public Void visitPrintStmt(Print stmt) {
+    Object value = evaluate(stmt.expression);
+    System.out.println(stringify(value));
+    return null;
+  }
+
+  @Override
+  public Void visitVarStmt(Stmt.Var stmt) {
+    Object value = null;
+    if (stmt.initializer != null) {
+      value = evaluate(stmt.initializer);
+    }
+
+    environment.define(stmt.name.lexeme, value);
+    return null;
   }
 
   @Override
@@ -33,6 +79,11 @@ public class Interpreter implements Expr.Visitor<Object> {
       default:
         return null;
     }
+  }
+
+  @Override
+  public Object visitVariableExpr(Expr.Variable expr) {
+    return environment.get(expr.name);
   }
 
   /**
@@ -105,16 +156,6 @@ public class Interpreter implements Expr.Visitor<Object> {
   }
 
   /**
-   * Direct the Interpreter to the correct method to call according to the type of
-   * expr
-   * 
-   * @return the evaluated expression.
-   */
-  private Object evaluate(Expr expr) {
-    return expr.accept(this);
-  }
-
-  /**
    * No implicit conversions (fuck you javascript)
    * 
    * @return whether two Lox objects are equal
@@ -162,4 +203,5 @@ public class Interpreter implements Expr.Visitor<Object> {
 
     return object.toString();
   }
+
 }
