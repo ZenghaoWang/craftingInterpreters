@@ -12,7 +12,9 @@ import java.nio.file.Paths;
 import java.util.List;
 
 public class Lox {
+  private static final Interpreter interpreter = new Interpreter();
   static boolean hadError = false;
+  static boolean hadRuntimeError = false;
 
   public static void main(String[] args) throws IOException {
     switch (args.length) {
@@ -44,6 +46,9 @@ public class Lox {
     if (hadError) {
       System.exit(65);
     }
+    if (hadRuntimeError) {
+      System.exit(70);
+    }
   }
 
   /**
@@ -68,6 +73,7 @@ public class Lox {
 
       // Reset flag so that a user mistake does not kill the whole session
       hadError = false;
+
     }
   }
 
@@ -86,7 +92,7 @@ public class Lox {
       return;
     }
 
-    System.out.println(new AstPrinter().print(expr));
+    interpreter.interpret(expr);
   }
 
   static void error(int line, String message) {
@@ -96,6 +102,11 @@ public class Lox {
   static void error(Token token, String message) {
     String where = token.type == TokenType.EOF ? " at end" : "at '" + token.lexeme + "'";
     report(token.line, where, message);
+  }
+
+  static void runtimeError(RuntimeError error) {
+    System.err.println(error.getMessage() + "\n[line " + error.token.line + "]");
+    hadRuntimeError = true;
   }
 
   /**
