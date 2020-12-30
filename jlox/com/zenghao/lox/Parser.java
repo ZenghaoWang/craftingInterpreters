@@ -4,6 +4,7 @@
 package com.zenghao.lox;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.zenghao.lox.Stmt.While;
@@ -57,6 +58,9 @@ public class Parser {
   }
 
   private Stmt statement() {
+    if (match(TokenType.FOR)) {
+      return forStatement();
+    }
     if (match(TokenType.IF)) {
       return ifStatement();
     }
@@ -71,6 +75,56 @@ public class Parser {
     }
 
     return expressionStatement();
+  }
+
+  /**
+   * Desugar a for-loop into a while loop.
+   * 
+   * @return
+   */
+  private Stmt forStatement() {
+    consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
+
+    Stmt initializer;
+    if (match(TokenType.SEMICOLON)) {
+      initializer = null;
+    } else if (match(TokenType.VAR)) {
+      initializer = varDeclaration();
+    } else {
+      initializer = expressionStatement();
+    }
+
+    Expr condition = null;
+    if (!check(TokenType.SEMICOLON)) {
+      condition = expression();
+    }
+    consume(TokenType.SEMICOLON, "Expect ';' after loop condition.");
+
+    Expr increment = null;
+    if (!check(TokenType.RIGHT_PAREN)) {
+      increment = expression();
+    }
+    consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.");
+
+    Stmt body = statement();
+    if (increment != null) {
+      // Insert the increment statement into the end of the body, like an equivalent
+      // while loop
+      body = new Stmt.Block(Arrays.asList(body, new Stmt.Expression(increment)));
+    }
+
+    if (condition == null) {
+      // If no condition is included, it is an infinite loop
+      condition = new Expr.Literal(true);
+    }
+    body = new Stmt.While(condition, body);
+
+    // Initialier runs once before the loop, if it exists.
+    if (initializer != null) {
+      body = new Stmt.Block(Arrays.asList(initializer, body));
+    }
+
+    return body;
   }
 
   private Stmt ifStatement() {
