@@ -1,22 +1,19 @@
-CC = gcc
-CFLAGS := -Wall -Wextra -Werror $(CFLAGS)
-LDFLAGS := $(LDFLAGS)
+CFLAGS := -Wall -Wextra $(CFLAGS)
 
 .PHONY: all clean
 
-all: main
+all: main 
 
-main: chunk.o memory.o
-	$(CC) $^ -o $@ $(LDFLAGS)
+main: value.o chunk.o debug.o memory.o main.o 
+	gcc $^ -o $@
 
 SRC_FILES = $(wildcard *.c)
 OBJ_FILES = $(SRC_FILES:.c=.o)
 
--include $(OBJ_FILES:.o=.d)
-
 %.o: %.c
-	$(CC) $< -o $@ -c -MMD $(CFLAGS)
+	gcc $< -o $@ -c $(CFLAGS)
 
 
 clean:
-	rm -f $(OBJ_FILES) $(OBJ_FILES:.o=.d) main
+	rm -f  $(OBJ_FILES) $(OBJ_FILES:.o=.d) main
+
