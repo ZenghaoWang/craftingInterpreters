@@ -2,9 +2,9 @@ CFLAGS := -Wall -Wextra $(CFLAGS)
 
 .PHONY: all clean
 
-all: main 
+all: clox 
 
-main: value.o chunk.o debug.o memory.o main.o vm.o
+clox: value.o chunk.o debug.o memory.o clox.o vm.o compiler.o scanner.o
 	gcc $^ -o $@
 
 SRC_FILES = $(wildcard *.c)
