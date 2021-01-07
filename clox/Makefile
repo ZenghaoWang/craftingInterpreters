@@ -15,5 +15,5 @@ OBJ_FILES = $(SRC_FILES:.c=.o)
 
 
 clean:
-	rm -f  $(OBJ_FILES) $(OBJ_FILES:.o=.d) main
+	rm -f  $(OBJ_FILES) $(OBJ_FILES:.o=.d) clox
 
