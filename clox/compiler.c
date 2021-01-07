@@ -1,4 +1,3 @@
-#include <cstddef>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +6,11 @@
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
+
+#ifdef DEBUG_PRINT_CODE
+#include "debug.h"
+#endif
+
 #include "scanner.h"
 
 typedef struct {
@@ -128,7 +132,15 @@ static void emitConstant(Parser *parser, Value value) {
   emitBytes(parser, OP_CONSTANT, makeConstant(parser, value));
 }
 
-static void endCompiler(Parser *parser) { emitReturn(parser); }
+static void endCompiler(Parser *parser) {
+  emitReturn(parser);
+
+#ifdef DEBUG_PRINT_CODE
+  if (!parser->hadError) {
+    disassembleChunk(currentChunk(), "code");
+  }
+#endif
+}
 
 // The table is further down
 ParseRule rules[];
