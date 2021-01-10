@@ -4,7 +4,7 @@ CFLAGS := -Wall -Wextra $(CFLAGS)
 
 all: clox 
 
-clox: value.o chunk.o debug.o memory.o clox.o vm.o compiler.o scanner.o object.o
+clox: value.o chunk.o debug.o memory.o clox.o vm.o compiler.o scanner.o object.o table.o
 	gcc $^ -o $@
 
 SRC_FILES = $(wildcard *.c)

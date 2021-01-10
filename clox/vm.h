@@ -2,6 +2,7 @@
 #define clox_vm_h
 
 #include "chunk.h"
+#include "table.h"
 #include "value.h"
 
 #include <stdint.h>
@@ -16,6 +17,8 @@ typedef struct {
   // Ptr to just after the top value on the stack.
   // In other words, where the next value to be pushed will go.
   Value *stackTop;
+
+  Table strings;
 
   Obj *objects;
 } VM;
