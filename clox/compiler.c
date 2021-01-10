@@ -17,6 +17,7 @@
 typedef struct {
   Token current;
   Token previous;
+  VM *vm;
   bool hadError;
   bool panic;
 } Parser;
@@ -43,9 +44,10 @@ typedef struct {
   Precedence precedence;
 } ParseRule;
 
-static void initParser(Parser *parser) {
+static void initParser(Parser *parser, VM *vm) {
   parser->hadError = false;
   parser->panic = false;
+  parser->vm = vm;
 }
 
 Chunk *compilingChunk;
@@ -234,6 +236,12 @@ static void number(Scanner *scanner, Parser *parser) {
   emitConstant(parser, NUMBER_VAL(value));
 }
 
+static void string(Scanner *scanner, Parser *parser) {
+  emitConstant(parser,
+               OBJ_VAL(copyString(parser->vm, parser->previous.start + 1,
+                                  parser->previous.length - 2)));
+}
+
 static void unary(Scanner *scanner, Parser *parser) {
   TokenType operatorType = parser->previous.type;
 
@@ -278,7 +286,7 @@ ParseRule rules[] = {
     [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_STRING] = {NULL, NULL, PREC_NONE},
+    [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
@@ -300,11 +308,11 @@ ParseRule rules[] = {
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
 
-bool compile(const char *source, Chunk *chunk) {
+bool compile(VM *vm, const char *source, Chunk *chunk) {
   Scanner scanner;
   initScanner(&scanner, source);
   Parser parser;
-  initParser(&parser);
+  initParser(&parser, vm);
   compilingChunk = chunk;
 
   advance(&scanner, &parser);

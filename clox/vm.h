@@ -16,6 +16,8 @@ typedef struct {
   // Ptr to just after the top value on the stack.
   // In other words, where the next value to be pushed will go.
   Value *stackTop;
+
+  Obj *objects;
 } VM;
 
 typedef enum {

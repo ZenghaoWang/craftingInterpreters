@@ -3,11 +3,14 @@
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "memory.h"
+#include "object.h"
 #include "value.h"
 
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 static void resetStack(VM *vm) { vm->stackTop = vm->stack; }
 
@@ -25,9 +28,12 @@ static void runtimeError(VM *vm, const char *format, ...) {
   resetStack(vm);
 }
 
-void initVM(VM *vm) { resetStack(vm); }
+void initVM(VM *vm) {
+  resetStack(vm);
+  vm->objects = NULL;
+}
 
-void freeVM(VM *vm) {}
+void freeVM(VM *vm) { freeObjects(vm); }
 
 void push(VM *vm, Value value) {
   *vm->stackTop = value;
@@ -43,6 +49,20 @@ static Value peek(VM *vm, int distance) { return vm->stackTop[-1 - distance]; }
 
 static bool isFalsey(Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+static void concatenate(VM *vm) {
+  ObjString *b = AS_STRING(pop(vm));
+  ObjString *a = AS_STRING(pop(vm));
+
+  int length = a->length + b->length;
+  char *chars = ALLOCATE(char, length + 1);
+  memcpy(chars, a->chars, a->length);
+  memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+
+  ObjString *result = takeString(vm, chars, length);
+  push(vm, OBJ_VAL(result));
 }
 
 static InterpretResult run(VM *vm) {
@@ -95,16 +115,29 @@ static InterpretResult run(VM *vm) {
       Value b = pop(vm);
       Value a = pop(vm);
       push(vm, BOOL_VAL(valuesEqual(a, b)));
+      break;
     }
 
     case OP_GREATER:
       BINARY_OP(BOOL_VAL, >);
+      break;
     case OP_LESS:
       BINARY_OP(BOOL_VAL, <);
-
-    case OP_ADD:
-      BINARY_OP(NUMBER_VAL, +);
       break;
+
+    case OP_ADD: {
+      if (IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) {
+        concatenate(vm);
+      } else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
+        double b = AS_NUMBER(pop(vm));
+        double a = AS_NUMBER(pop(vm));
+        push(vm, NUMBER_VAL(a + b));
+      } else {
+        runtimeError(vm, "Operands must be two numbers or two strings.");
+      }
+      break;
+    }
+
     case OP_SUBTRACT:
       BINARY_OP(NUMBER_VAL, -);
       break;
@@ -143,7 +176,7 @@ InterpretResult interpret(VM *vm, const char *source) {
   Chunk chunk;
   initChunk(&chunk);
 
-  if (!compile(source, &chunk)) {
+  if (!compile(vm, source, &chunk)) {
     freeChunk(&chunk);
     return INTERPRET_COMPILE_ERROR;
   }
