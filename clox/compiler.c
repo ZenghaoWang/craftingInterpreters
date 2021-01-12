@@ -38,7 +38,7 @@ typedef enum {
 } Precedence;
 
 // Function ptr that takes a scanner and parser and returns nothing
-typedef void (*ParseFn)(Scanner *, Parser *);
+typedef void (*ParseFn)(Scanner *, Parser *, bool canAssign);
 typedef struct {
   ParseFn prefix;
   ParseFn infix;
@@ -172,12 +172,17 @@ static void parsePrecedence(Scanner *scanner, Parser *parser,
     return;
   }
 
-  prefixRule(scanner, parser);
+  bool canAssign = precedence <= PREC_ASSIGNMENT;
+  prefixRule(scanner, parser, canAssign);
 
   while (precedence <= getRule(parser->current.type)->precedence) {
     advance(scanner, parser);
     ParseFn infixRule = getRule(parser->previous.type)->infix;
-    infixRule(scanner, parser);
+    infixRule(scanner, parser, canAssign);
+  }
+
+  if (canAssign && match(scanner, parser, TOKEN_EQUAL)) {
+    error(parser, "Invalid assignment target.");
   }
 }
 
@@ -196,7 +201,7 @@ static void defineVariable(Parser *parser, uint8_t global_idx) {
   emitBytes(parser, OP_DEFINE_GLOBAL, global_idx);
 }
 
-static void binary(Scanner *scanner, Parser *parser) {
+static void binary(Scanner *scanner, Parser *parser, bool canAssign) {
   TokenType operatorType = parser->previous.type;
 
   // Compile right operand
@@ -240,7 +245,7 @@ static void binary(Scanner *scanner, Parser *parser) {
   }
 }
 
-static void literal(Scanner *scanner, Parser *parser) {
+static void literal(Scanner *scanner, Parser *parser, bool canAssign) {
   switch (parser->previous.type) {
   case TOKEN_FALSE:
     emitByte(parser, OP_FALSE);
@@ -336,27 +341,33 @@ static void statement(Scanner *scanner, Parser *parser) {
   }
 }
 
-static void number(Scanner *scanner, Parser *parser) {
+static void number(Scanner *scanner, Parser *parser, bool canAssign) {
   double value = strtod(parser->previous.start, NULL);
   emitConstant(parser, NUMBER_VAL(value));
 }
 
-static void string(Scanner *scanner, Parser *parser) {
+static void string(Scanner *scanner, Parser *parser, bool canAssign) {
   emitConstant(parser,
                OBJ_VAL(copyString(parser->vm, parser->previous.start + 1,
                                   parser->previous.length - 2)));
 }
 
-static void namedVariable(Parser *parser, Token name) {
+static void namedVariable(Scanner *scanner, Parser *parser, Token name,
+                          bool canAssign) {
   uint8_t arg = identifierConstant(parser, &name);
-  emitBytes(parser, OP_GET_GLOBAL, arg);
+  if (canAssign && match(scanner, parser, TOKEN_EQUAL)) {
+    expression(scanner, parser);
+    emitBytes(parser, OP_SET_GLOBAL, arg);
+  } else {
+    emitBytes(parser, OP_GET_GLOBAL, arg);
+  }
 }
 
-static void variable(Scanner *scanner, Parser *parser) {
-  namedVariable(parser, parser->previous);
+static void variable(Scanner *scanner, Parser *parser, bool canAssign) {
+  namedVariable(scanner, parser, parser->previous, canAssign);
 }
 
-static void unary(Scanner *scanner, Parser *parser) {
+static void unary(Scanner *scanner, Parser *parser, bool canAssign) {
   TokenType operatorType = parser->previous.type;
 
   parsePrecedence(scanner, parser, PREC_UNARY);
@@ -373,7 +384,7 @@ static void unary(Scanner *scanner, Parser *parser) {
   }
 }
 
-static void grouping(Scanner *scanner, Parser *parser) {
+static void grouping(Scanner *scanner, Parser *parser, bool canAssign) {
   expression(scanner, parser);
   consume(scanner, parser, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
