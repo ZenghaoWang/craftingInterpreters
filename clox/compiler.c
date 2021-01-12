@@ -6,6 +6,7 @@
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
+#include "object.h"
 #include "value.h"
 
 #ifdef DEBUG_PRINT_CODE
@@ -180,6 +181,21 @@ static void parsePrecedence(Scanner *scanner, Parser *parser,
   }
 }
 
+static uint8_t identifierConstant(Parser *parser, Token *name) {
+  return makeConstant(
+      parser, OBJ_VAL(copyString(parser->vm, name->start, name->length)));
+}
+
+static uint8_t parseVariable(Scanner *scanner, Parser *parser,
+                             const char *errorMessage) {
+  consume(scanner, parser, TOKEN_IDENTIFIER, errorMessage);
+  return identifierConstant(parser, &parser->previous);
+}
+
+static void defineVariable(Parser *parser, uint8_t global_idx) {
+  emitBytes(parser, OP_DEFINE_GLOBAL, global_idx);
+}
+
 static void binary(Scanner *scanner, Parser *parser) {
   TokenType operatorType = parser->previous.type;
 
@@ -244,6 +260,21 @@ static void expression(Scanner *scanner, Parser *parser) {
   parsePrecedence(scanner, parser, PREC_ASSIGNMENT);
 }
 
+static void varDeclaration(Scanner *scanner, Parser *parser) {
+  uint8_t global_idx = parseVariable(scanner, parser, "Expect variable name.");
+
+  if (match(scanner, parser, TOKEN_EQUAL)) {
+    expression(scanner, parser);
+  } else {
+    emitByte(parser, OP_NIL);
+  }
+
+  consume(scanner, parser, TOKEN_SEMICOLON,
+          "Expect ';' after variable declaration.");
+
+  defineVariable(parser, global_idx);
+}
+
 static void expressionStatement(Scanner *scanner, Parser *parser) {
   expression(scanner, parser);
   consume(scanner, parser, TOKEN_SEMICOLON, "Expect ';' after expression.");
@@ -286,7 +317,11 @@ static void statement(Scanner *scanner, Parser *parser);
 static void declaration(Scanner *scanner, Parser *parser);
 
 static void declaration(Scanner *scanner, Parser *parser) {
-  statement(scanner, parser);
+  if (match(scanner, parser, TOKEN_VAR)) {
+    varDeclaration(scanner, parser);
+  } else {
+    statement(scanner, parser);
+  }
 
   if (parser->panic) {
     synchronize(scanner, parser);

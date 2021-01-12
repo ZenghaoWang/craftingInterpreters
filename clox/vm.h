@@ -18,6 +18,8 @@ typedef struct {
   // In other words, where the next value to be pushed will go.
   Value *stackTop;
 
+  Table globals;
+
   Table strings;
 
   Obj *objects;
