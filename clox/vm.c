@@ -116,6 +116,10 @@ static InterpretResult run(VM *vm) {
       push(vm, BOOL_VAL(false));
       break;
 
+    case OP_POP:
+      pop(vm);
+      break;
+
     case OP_EQUAL: {
       Value b = pop(vm);
       Value a = pop(vm);

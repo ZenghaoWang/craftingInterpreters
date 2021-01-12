@@ -244,10 +244,42 @@ static void expression(Scanner *scanner, Parser *parser) {
   parsePrecedence(scanner, parser, PREC_ASSIGNMENT);
 }
 
+static void expressionStatement(Scanner *scanner, Parser *parser) {
+  expression(scanner, parser);
+  consume(scanner, parser, TOKEN_SEMICOLON, "Expect ';' after expression.");
+  emitByte(parser, OP_POP);
+}
+
 static void printStatement(Scanner *scanner, Parser *parser) {
   expression(scanner, parser);
   consume(scanner, parser, TOKEN_SEMICOLON, "Expect ';' after value.");
   emitByte(parser, OP_PRINT);
+}
+
+static void synchronize(Scanner *scanner, Parser *parser) {
+  parser->panic = false;
+
+  while (parser->current.type != TOKEN_EOF) {
+    if (parser->previous.type == TOKEN_SEMICOLON) {
+      return;
+    }
+
+    switch (parser->current.type) {
+    case TOKEN_CLASS:
+    case TOKEN_FUN:
+    case TOKEN_VAR:
+    case TOKEN_FOR:
+    case TOKEN_IF:
+    case TOKEN_WHILE:
+    case TOKEN_PRINT:
+    case TOKEN_RETURN:
+      return;
+    default:
+      break;
+    }
+
+    advance(scanner, parser);
+  }
 }
 
 static void statement(Scanner *scanner, Parser *parser);
@@ -255,11 +287,17 @@ static void declaration(Scanner *scanner, Parser *parser);
 
 static void declaration(Scanner *scanner, Parser *parser) {
   statement(scanner, parser);
+
+  if (parser->panic) {
+    synchronize(scanner, parser);
+  }
 }
 
 static void statement(Scanner *scanner, Parser *parser) {
   if (match(scanner, parser, TOKEN_PRINT)) {
     printStatement(scanner, parser);
+  } else {
+    expressionStatement(scanner, parser);
   }
 }
 
