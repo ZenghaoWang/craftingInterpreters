@@ -111,6 +111,19 @@ static void consume(Scanner *scanner, Parser *parser, TokenType type,
   errorAtCurrent(parser, message);
 }
 
+static bool check(Parser *parser, TokenType type) {
+  return parser->current.type == type;
+}
+
+static bool match(Scanner *scanner, Parser *parser, TokenType type) {
+  if (!check(parser, type)) {
+    return false;
+  }
+
+  advance(scanner, parser);
+  return true;
+}
+
 static void emitByte(Parser *parser, uint8_t byte) {
   writeChunk(currentChunk(), byte, parser->previous.line);
 }
@@ -231,6 +244,25 @@ static void expression(Scanner *scanner, Parser *parser) {
   parsePrecedence(scanner, parser, PREC_ASSIGNMENT);
 }
 
+static void printStatement(Scanner *scanner, Parser *parser) {
+  expression(scanner, parser);
+  consume(scanner, parser, TOKEN_SEMICOLON, "Expect ';' after value.");
+  emitByte(parser, OP_PRINT);
+}
+
+static void statement(Scanner *scanner, Parser *parser);
+static void declaration(Scanner *scanner, Parser *parser);
+
+static void declaration(Scanner *scanner, Parser *parser) {
+  statement(scanner, parser);
+}
+
+static void statement(Scanner *scanner, Parser *parser) {
+  if (match(scanner, parser, TOKEN_PRINT)) {
+    printStatement(scanner, parser);
+  }
+}
+
 static void number(Scanner *scanner, Parser *parser) {
   double value = strtod(parser->previous.start, NULL);
   emitConstant(parser, NUMBER_VAL(value));
@@ -316,8 +348,9 @@ bool compile(VM *vm, const char *source, Chunk *chunk) {
   compilingChunk = chunk;
 
   advance(&scanner, &parser);
-  expression(&scanner, &parser);
-  consume(&scanner, &parser, TOKEN_EOF, "Expect end of expression.");
+  while (!match(&scanner, &parser, TOKEN_EOF)) {
+    declaration(&scanner, &parser);
+  }
 
   endCompiler(&parser);
 

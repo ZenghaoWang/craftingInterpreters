@@ -165,9 +165,13 @@ static InterpretResult run(VM *vm) {
       // Negate the top value on the stack
       push(vm, NUMBER_VAL(-AS_NUMBER(pop(vm))));
       break;
-    case OP_RETURN: {
+
+    case OP_PRINT:
       printValue(pop(vm));
       printf("\n");
+      break;
+
+    case OP_RETURN: {
       return INTERPRET_OK;
     }
     }
