@@ -146,6 +146,17 @@ static void emitBytes(Parser *parser, uint8_t byte1, uint8_t byte2) {
   emitByte(parser, byte2);
 }
 
+static void emitLoop(Parser *parser, int loopStart) {
+  emitByte(parser, OP_LOOP);
+
+  int offset = currentChunk()->count - loopStart + 2;
+  if (offset > UINT16_MAX) {
+    error(parser, "Loop body too large.");
+  }
+
+  emitBytes(parser, (offset >> 8) & 0xff, offset & 0xff);
+}
+
 static int emitJump(Parser *parser, uint8_t opCode) {
   emitByte(parser, opCode);
   emitBytes(parser, 0xff, 0xff);
@@ -448,6 +459,74 @@ static void expressionStatement(Scanner *scanner, Parser *parser,
   emitByte(parser, OP_POP);
 }
 
+static void forStatement(Scanner *scanner, Parser *parser, Compiler *compiler) {
+  // Variables declared in a for loop are scoped locally
+  beginScope(compiler);
+
+  consume(scanner, parser, TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+
+  // initializer
+  if (match(scanner, parser, TOKEN_SEMICOLON)) {
+    // blank initializer
+  }
+  // i.e int i = 0;
+  else if (match(scanner, parser, TOKEN_VAR)) {
+    varDeclaration(scanner, parser, compiler);
+  } else {
+    expressionStatement(scanner, parser, compiler);
+  }
+
+  int loopStart = currentChunk()->count;
+
+  int exitJump = -1;
+  // Check for condition clause
+  if (!match(scanner, parser, TOKEN_SEMICOLON)) {
+    expression(scanner, parser, compiler);
+    consume(scanner, parser, TOKEN_SEMICOLON,
+            "Expect ';' after loop condition.");
+
+    // exit loop if condition is false
+    exitJump = emitJump(parser, OP_JUMP_IF_FALSE);
+    // pop condition bool
+    emitByte(parser, OP_POP);
+  }
+
+  // Incrementer
+  // if it exists, we jump over the increment, execute the body, jump back to
+  // the increment, execute it, then execute the next interation.
+  if (!match(scanner, parser, TOKEN_RIGHT_PAREN)) {
+    // initially skip the incrementer
+    int bodyJump = emitJump(parser, OP_JUMP);
+
+    int incrementStart = currentChunk()->count;
+
+    // compile increment expression
+    expression(scanner, parser, compiler);
+    // pop increment expression because we only need it for the side effect
+    emitByte(parser, OP_POP);
+    consume(scanner, parser, TOKEN_RIGHT_PAREN,
+            "Expect ')' after for clauses.");
+
+    emitLoop(parser, loopStart);
+    loopStart = incrementStart;
+
+    patchJump(parser, bodyJump);
+  }
+
+  // body of for loop
+  statement(scanner, parser, compiler);
+
+  emitLoop(parser, loopStart);
+
+  if (exitJump != -1) {
+    patchJump(parser, exitJump);
+    // pop condition
+    emitByte(parser, OP_POP);
+  }
+
+  endScope(parser, compiler);
+}
+
 static void ifStatement(Scanner *scanner, Parser *parser, Compiler *compiler) {
   // At runtime, this leaves the condition value on top of the stack.
   consume(scanner, parser, TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
@@ -480,6 +559,27 @@ static void printStatement(Scanner *scanner, Parser *parser,
   expression(scanner, parser, compiler);
   consume(scanner, parser, TOKEN_SEMICOLON, "Expect ';' after value.");
   emitByte(parser, OP_PRINT);
+}
+
+static void whileStatement(Scanner *scanner, Parser *parser,
+                           Compiler *compiler) {
+  int loopStart = currentChunk()->count;
+
+  consume(scanner, parser, TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+  expression(scanner, parser, compiler);
+  consume(scanner, parser, TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  int exitJump = emitJump(parser, OP_JUMP_IF_FALSE);
+
+  emitByte(parser, OP_POP);
+
+  // execute body of while loop
+  statement(scanner, parser, compiler);
+
+  emitLoop(parser, loopStart);
+
+  patchJump(parser, exitJump);
+  emitByte(parser, OP_POP);
 }
 
 static void synchronize(Scanner *scanner, Parser *parser) {
@@ -523,8 +623,12 @@ static void declaration(Scanner *scanner, Parser *parser, Compiler *compiler) {
 static void statement(Scanner *scanner, Parser *parser, Compiler *compiler) {
   if (match(scanner, parser, TOKEN_PRINT)) {
     printStatement(scanner, parser, compiler);
+  } else if (match(scanner, parser, TOKEN_FOR)) {
+    forStatement(scanner, parser, compiler);
   } else if (match(scanner, parser, TOKEN_IF)) {
     ifStatement(scanner, parser, compiler);
+  } else if (match(scanner, parser, TOKEN_WHILE)) {
+    whileStatement(scanner, parser, compiler);
   } else if (match(scanner, parser, TOKEN_LEFT_BRACE)) {
     beginScope(compiler);
     block(scanner, parser, compiler);
