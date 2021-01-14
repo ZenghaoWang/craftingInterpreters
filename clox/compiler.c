@@ -332,6 +332,20 @@ static void defineVariable(Parser *parser, Compiler *compiler,
   emitBytes(parser, OP_DEFINE_GLOBAL, global_idx);
 }
 
+static void and_(Scanner *scanner, Parser *parser, Compiler *compiler,
+                 bool canAssign) {
+  // When and_ is called, the left hand expression is already on top of the
+  // stack.
+  // If that value is false, we skip the right operand.
+  int endJump = emitJump(parser, OP_JUMP_IF_FALSE);
+
+  // If the left side is false, we discard the value.
+  emitByte(parser, OP_POP);
+  parsePrecedence(scanner, parser, compiler, PREC_AND);
+
+  patchJump(parser, endJump);
+}
+
 static void binary(Scanner *scanner, Parser *parser, Compiler *compiler,
                    bool canAssign) {
   TokenType operatorType = parser->previous.type;
@@ -526,6 +540,21 @@ static void number(Scanner *scanner, Parser *parser, Compiler *compiler,
   emitConstant(parser, NUMBER_VAL(value));
 }
 
+static void or_(Scanner *scanner, Parser *parser, Compiler *compiler,
+                bool canAssign) {
+  // If the left hand operand is false, jump to the right hand.
+  int elseJump = emitJump(parser, OP_JUMP_IF_FALSE);
+  // Otherwise, keep the left hand value on the stack and discard the right hand
+  // value.
+  int endJump = emitJump(parser, OP_JUMP);
+
+  patchJump(parser, elseJump);
+  emitByte(parser, OP_POP);
+
+  parsePrecedence(scanner, parser, compiler, PREC_OR);
+  patchJump(parser, endJump);
+}
+
 static void string(Scanner *scanner, Parser *parser, Compiler *compiler,
                    bool canAssign) {
   emitConstant(parser,
@@ -608,7 +637,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
-    [TOKEN_AND] = {NULL, NULL, PREC_NONE},
+    [TOKEN_AND] = {NULL, and_, PREC_AND},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
@@ -616,7 +645,7 @@ ParseRule rules[] = {
     [TOKEN_FUN] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
     [TOKEN_NIL] = {literal, NULL, PREC_NONE},
-    [TOKEN_OR] = {NULL, NULL, PREC_NONE},
+    [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
