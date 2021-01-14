@@ -146,6 +146,12 @@ static void emitBytes(Parser *parser, uint8_t byte1, uint8_t byte2) {
   emitByte(parser, byte2);
 }
 
+static int emitJump(Parser *parser, uint8_t opCode) {
+  emitByte(parser, opCode);
+  emitBytes(parser, 0xff, 0xff);
+  return currentChunk()->count - 2;
+}
+
 static void emitReturn(Parser *parser) { emitByte(parser, OP_RETURN); }
 
 static uint8_t makeConstant(Parser *parser, Value value) {
@@ -159,6 +165,21 @@ static uint8_t makeConstant(Parser *parser, Value value) {
 }
 static void emitConstant(Parser *parser, Value value) {
   emitBytes(parser, OP_CONSTANT, makeConstant(parser, value));
+}
+
+static void patchJump(Parser *parser, int offset) {
+  // Number of bytes to jump over
+  int jump = currentChunk()->count - offset - 2;
+
+  if (jump > UINT16_MAX) {
+    error(parser, "Too much code to jump over.");
+  }
+
+  // Insert a 16 bit unsigned integer
+  // (jump >> 8) & 0xff is the 8 leftmost bits of jumpn
+  currentChunk()->code[offset] = (jump >> 8) & 0xff;
+  // jump & 0xff is the 8 rightmost bits of jump
+  currentChunk()->code[offset + 1] = jump & 0xff;
 }
 
 static void initCompiler(Compiler *compiler) {
@@ -413,6 +434,33 @@ static void expressionStatement(Scanner *scanner, Parser *parser,
   emitByte(parser, OP_POP);
 }
 
+static void ifStatement(Scanner *scanner, Parser *parser, Compiler *compiler) {
+  // At runtime, this leaves the condition value on top of the stack.
+  consume(scanner, parser, TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression(scanner, parser, compiler);
+  consume(scanner, parser, TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  int thenJump = emitJump(parser, OP_JUMP_IF_FALSE);
+  // Pop the condition value
+  emitByte(parser, OP_POP);
+  // Then branch statement, which can be skipped by the jump
+  statement(scanner, parser, compiler);
+
+  // This instruction will be emitted if the then branch is executed, causing
+  // the vm to jump past the else block no matter what.
+  int elseJump = emitJump(parser, OP_JUMP);
+
+  // Add an operand to the jump instruction telling it how far to jump.
+  patchJump(parser, thenJump);
+
+  emitByte(parser, OP_POP);
+  if (match(scanner, parser, TOKEN_ELSE)) {
+    statement(scanner, parser, compiler);
+  }
+
+  patchJump(parser, elseJump);
+}
+
 static void printStatement(Scanner *scanner, Parser *parser,
                            Compiler *compiler) {
   expression(scanner, parser, compiler);
@@ -461,6 +509,8 @@ static void declaration(Scanner *scanner, Parser *parser, Compiler *compiler) {
 static void statement(Scanner *scanner, Parser *parser, Compiler *compiler) {
   if (match(scanner, parser, TOKEN_PRINT)) {
     printStatement(scanner, parser, compiler);
+  } else if (match(scanner, parser, TOKEN_IF)) {
+    ifStatement(scanner, parser, compiler);
   } else if (match(scanner, parser, TOKEN_LEFT_BRACE)) {
     beginScope(compiler);
     block(scanner, parser, compiler);
