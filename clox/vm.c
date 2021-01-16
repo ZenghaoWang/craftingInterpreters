@@ -7,13 +7,17 @@
 #include "object.h"
 #include "table.h"
 #include "value.h"
+#include "vm.h"
 
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-static void resetStack(VM *vm) { vm->stackTop = vm->stack; }
+static void resetStack(VM *vm) {
+  vm->stackTop = vm->stack;
+  vm->frameCount = 0;
+}
 
 static void runtimeError(VM *vm, const char *format, ...) {
   va_list args;
@@ -22,8 +26,9 @@ static void runtimeError(VM *vm, const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction = vm->ip - vm->chunk->code - 1;
-  int line = vm->chunk->lines[instruction];
+  CallFrame *frame = &vm->frames[vm->frameCount - 1];
+  size_t instruction = frame->ip - frame->function->chunk.code - 1;
+  int line = frame->function->chunk.lines[instruction];
   fprintf(stderr, "[line %d] in script\n", line);
 
   resetStack(vm);
@@ -73,10 +78,12 @@ static void concatenate(VM *vm) {
 }
 
 static InterpretResult run(VM *vm) {
-#define READ_BYTE() (*vm->ip++)
-#define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+  CallFrame *frame = &vm->frames[vm->frameCount - 1];
+#define READ_BYTE() (*frame->ip++)
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 // increment ip, then evaluate the 16 bit short
-#define READ_SHORT() (vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
+#define READ_SHORT()                                                           \
+  (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op)                                               \
   do {                                                                         \
@@ -100,7 +107,8 @@ static InterpretResult run(VM *vm) {
     }
     printf("\n");
     // this function takes an offset, but we are storing a direct pointer
-    disassembleInstruction(vm->chunk, (int)(vm->ip - vm->chunk->code));
+    disassembleInstruction(&frame->function->chunk,
+                           (int)(frame->ip - frame->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -163,7 +171,7 @@ static InterpretResult run(VM *vm) {
 
     case OP_SET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      vm->stack[slot] = peek(vm, 0);
+      frame->slots[slot] = peek(vm, 0);
       break;
     }
 
@@ -224,21 +232,21 @@ static InterpretResult run(VM *vm) {
 
     case OP_JUMP: {
       uint16_t offset = READ_SHORT();
-      vm->ip += offset;
+      frame->ip += offset;
       break;
     }
 
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(peek(vm, 0))) {
-        vm->ip += offset;
+        frame->ip += offset;
       }
       break;
     }
 
     case OP_LOOP: {
       uint16_t offset = READ_SHORT();
-      vm->ip -= offset;
+      frame->ip -= offset;
       break;
     }
 
@@ -255,19 +263,16 @@ static InterpretResult run(VM *vm) {
 }
 
 InterpretResult interpret(VM *vm, const char *source) {
-  Chunk chunk;
-  initChunk(&chunk);
+  ObjFunction *function = compile(vm, source);
 
-  if (!compile(vm, source, &chunk)) {
-    freeChunk(&chunk);
+  if (function == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
+  push(vm, OBJ_VAL(function));
+  CallFrame *frame = &vm->frames[vm->frameCount++];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slots = vm->stack;
 
-  vm->chunk = &chunk;
-  vm->ip = vm->chunk->code;
-
-  InterpretResult result = run(vm);
-
-  freeChunk(&chunk);
-  return result;
+  return run(vm);
 }

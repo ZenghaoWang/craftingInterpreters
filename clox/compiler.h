@@ -4,5 +4,8 @@
 #include "object.h"
 #include "vm.h"
 
-bool compile(VM *vm, const char *source, Chunk *chunk);
+/**
+ * Return NULL on compile error.
+ */
+ObjFunction *compile(VM *vm, const char *source);
 #endif
